@@ -159,6 +159,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+                case IDM_EDIT_COPY:
+				    DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, About);
+                    SendMessage(hEdit, WM_COPY, 0, 0);
+                    break;
+                case IDM_EDIT_CUT:
+                    SendMessage(hEdit, WM_CUT, 0, 0);
+                    break;
+                case IDM_EDIT_SELECTALL:
+					SendMessage(hEdit, EM_SETSEL, 0, -1);
+				    break;
                 case IDM_ABOUT:
                     DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                     break;
@@ -177,15 +187,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     }
                     break;
                 case IDM_FILE_SAVE:
-                    if (GetSaveFileName(&ofn)) {
+                    if (szCurrentFile[0] != L'\0') {
                         int length = GetWindowTextLength(hEdit);
                         wchar_t* buffer = new wchar_t[length + 1];
                         GetWindowText(hEdit, buffer, length + 1);
-                        std::wofstream file(szFileName);
+                        std::wofstream file(szCurrentFile);
                         if (file) {
                             file.write(buffer, length);
                         }
-                        delete[] buffer;
                     }
                     break;
                 case IDM_FILE_NEW:
@@ -199,9 +208,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         wchar_t *buffer = new wchar_t[length+1];
                         GetWindowText(hEdit, buffer, length + 1);
                         std::wofstream file(szFileName);
-                        
+                        if (file) {
+							file.write(buffer, length);
+							wcscpy_s(szCurrentFile, szFileName);
+                        }
+						delete[] buffer;
                     }
-                
                 break;
                 default:
                     return DefWindowProc(hWnd, message, wParam, lParam);

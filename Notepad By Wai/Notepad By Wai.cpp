@@ -55,7 +55,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DispatchMessage(&msg);
         }
     }
-
+    //return the message of msg.wParam to int
     return (int) msg.wParam;
 }
 

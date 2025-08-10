@@ -15,11 +15,66 @@ HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 HWND hEdit;                                     // Global edit for the hedit 
+static BOOL g_bFullScreen = FALSE;
+static RECT g_rcNormal = { 0 };
 // Forward declarations of functions included in this code module:
+
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+
+void SaveWindowRect(HWND hWnd) {
+    GetWindowRect(hWnd, &g_rcNormal);
+}
+void RestoreWindow(HWND hwnd)
+{
+    // Restore window style to normal overlapped window (title bar, borders)
+    SetWindowLong(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+    // Restore saved window size and position
+    SetWindowPos(hwnd, HWND_TOP,
+        g_rcNormal.left,
+        g_rcNormal.top,
+        g_rcNormal.right - g_rcNormal.left,
+        g_rcNormal.bottom - g_rcNormal.top,
+        SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+}
+void ToggleFullScreen(HWND hwnd)
+{
+    if (!g_bFullScreen)
+    {
+        // Save the current window position/size
+        GetWindowRect(hwnd, &g_rcNormal);
+
+        // Remove border and title bar
+        SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+
+        // Get screen dimensions
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+        // Resize to full screen
+        SetWindowPos(hwnd, HWND_TOP, 0, 0, screenWidth, screenHeight, SWP_FRAMECHANGED);
+
+        g_bFullScreen = TRUE;
+    }
+    else
+    {
+        // Restore normal style
+        SetWindowLong(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+        // Restore original position
+        SetWindowPos(hwnd, HWND_TOP,
+            g_rcNormal.left, g_rcNormal.top,
+            g_rcNormal.right - g_rcNormal.left,
+            g_rcNormal.bottom - g_rcNormal.top,
+            SWP_FRAMECHANGED);
+
+        g_bFullScreen = FALSE;
+    }
+}
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -159,16 +214,30 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+                //copying the text
                 case IDM_EDIT_COPY:
-				    DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, About);
                     SendMessage(hEdit, WM_COPY, 0, 0);
+                    //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
                     break;
                 case IDM_EDIT_CUT:
                     SendMessage(hEdit, WM_CUT, 0, 0);
+                    //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
                     break;
                 case IDM_EDIT_SELECTALL:
-					SendMessage(hEdit, EM_SETSEL, 0, -1);
+                    SendMessage(hEdit, EM_SETSEL, 0, 0);
+                    //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
 				    break;
+                case IDM_EDIT_PASTE:
+                    SendMessage(hEdit, WM_PASTE, 0, 0);
+                    //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
+                    break;
+                case IDM_VIEW_FULL:
+                    //MessageBox(NULL, L"Full window", L"Full window", MB_OKCANCEL);
+                    ToggleFullScreen(hWnd);
+                    break;
+                case IDM_VIEW_RESTORE:
+                    RestoreWindow(hWnd);
+                    break;
                 case IDM_ABOUT:
                     DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                     break;

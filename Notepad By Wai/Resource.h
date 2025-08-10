@@ -8,25 +8,30 @@
 #define IDD_NOTEPADBYWAI_DIALOG         102
 #define IDM_FILE_SAVE                   102
 #define IDS_APP_TITLE                   103
+#define IDI_SMALL						108
+
+//file
 #define IDD_ABOUTBOX                    103
 #define IDM_SAVE_AS                     103
 #define IDM_ABOUT                       104
-#define IDC_POINTER                     104
 #define IDM_EXIT                        105
+
 #define IDI_NOTEPADBYWAI                107
-#define IDI_SMALL                       108
 #define IDC_NOTEPADBYWAI                109
 #define IDR_MAINFRAME                   128
-#define IDD_DIALOG1                     129
-#define IDI_ICON1                       130
-#define ID_EDIT_CUT                     32771
-#define ID_EDIT_COPY                    32772
-#define ID_EDIT_SELECT                  32773
+
+//edit
 #define IDM_EDIT_PASTE                  32774
-#define ID_VIEW                         32774
+#define IDM_VIEW                        32774
 #define IDM_EDIT_CUT                    40010
 #define IDM_EDIT_COPY                   40011
 #define IDM_EDIT_SELECTALL              40012
+#define IDM_EDIT_PASTE					40009
+
+//view 
+#define IDM_VIEW_FULL					40013
+#define IDM_VIEW_RESTORE				40014
+
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

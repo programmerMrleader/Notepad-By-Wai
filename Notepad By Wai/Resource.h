@@ -32,6 +32,10 @@
 #define IDM_VIEW_FULL					40013
 #define IDM_VIEW_RESTORE				40014
 
+//find and replace
+#define IDM_EDIT_FIND					40015
+#define IDM_EDIT_REPLACE				40016
+
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

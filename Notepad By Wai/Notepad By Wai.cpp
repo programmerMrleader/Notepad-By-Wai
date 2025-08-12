@@ -3,20 +3,38 @@
 
 #include "framework.h"
 #include "Notepad By Wai.h"
-
+#include <shlwapi.h>
+#pragma comment(lib,"shlwapi.lib")
 #include <commdlg.h>
 #include <string>
+
 #include <fstream>
 
 #define MAX_LOADSTRING 100
+
+#ifndef WM_FINDREPLACE
+#define WM_FINDREPLACE 0x0400 + 0x0C
+#endif
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 HWND hEdit;                                     // Global edit for the hedit 
+
 static BOOL g_bFullScreen = FALSE;
 static RECT g_rcNormal = { 0 };
+
+WCHAR szCurrentFile[MAX_PATH] = L"";
+
+
+FINDREPLACE fr = { 0 };                         // Find and replace 
+WCHAR szFindWhat[80] = L"";                     // Findable character
+WCHAR szReplaceWhat[80] = L"";                  // Replaceable character
+HWND hFindDlg = NULL;                           // Window handler of finding Dialog box
+HWND hReplaceDlg = NULL;                        // Window handler of replacing Dialog box 
+
+
 // Forward declarations of functions included in this code module:
 
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -184,18 +202,165 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_FINDREPLACE:
+    {
+        LPFINDREPLACE lpfr = (LPFINDREPLACE)lParam;
+
+        // Handle dialog closure
+        if (lpfr->Flags & FR_DIALOGTERM) {
+            if (hFindDlg == lpfr->hwndOwner) hFindDlg = NULL;
+            if (hReplaceDlg == lpfr->hwndOwner) hReplaceDlg = NULL;
+            return 0;
+        }
+
+        // Update global find/replace strings
+        if (lpfr->lpstrFindWhat) wcscpy_s(szFindWhat, lpfr->lpstrFindWhat);
+        if (lpfr->lpstrReplaceWith) wcscpy_s(szReplaceWhat, lpfr->lpstrReplaceWith);
+
+        int length = GetWindowTextLength(hEdit);
+        if (length <= 0) return 0;
+
+        // Get edit text content
+        wchar_t* buffer = new wchar_t[length + 1];
+        GetWindowText(hEdit, buffer, length + 1);
+        int findLen = wcslen(szFindWhat);
+
+        // Get current selection
+        DWORD selStart, selEnd;
+        SendMessage(hEdit, EM_GETSEL, (WPARAM)&selStart, (LPARAM)&selEnd);
+
+        if (lpfr->Flags & FR_FINDNEXT)
+        {
+            BOOL found = FALSE;
+            int searchStart = (lpfr->Flags & FR_DOWN) ? selEnd : 0;
+            int searchEnd = (lpfr->Flags & FR_DOWN) ? length : selStart;
+
+            // Case-sensitive search function
+            auto Search = [&](const wchar_t* start, const wchar_t* end) -> wchar_t* {
+                for (const wchar_t* p = start; p <= end - findLen; p++) {
+                    if (lpfr->Flags & FR_MATCHCASE) {
+                        if (wcsncmp(p, szFindWhat, findLen) == 0) return (wchar_t*)p;
+                    }
+                    else {
+                        if (_wcsnicmp(p, szFindWhat, findLen) == 0) return (wchar_t*)p;
+                    }
+                }
+                return nullptr;
+                };
+
+            wchar_t* foundPos = nullptr;
+            if (lpfr->Flags & FR_DOWN) {
+                // Forward search
+                foundPos = Search(buffer + searchStart, buffer + length);
+                if (!foundPos && (lpfr->Flags & FR_WRAPAROUND)) {
+                    foundPos = Search(buffer, buffer + searchStart);
+                }
+            }
+            else {
+                // Backward search
+                foundPos = Search(buffer, buffer + searchEnd);
+                if (foundPos) {
+                    // Find last occurrence
+                    wchar_t* lastFound = foundPos;
+                    while ((foundPos = Search(lastFound + 1, buffer + searchEnd)) != nullptr) {
+                        lastFound = foundPos;
+                    }
+                    foundPos = lastFound;
+                }
+                else if (lpfr->Flags & FR_WRAPAROUND) {
+                    foundPos = Search(buffer + searchEnd, buffer + length);
+                }
+            }
+
+            if (foundPos) {
+                int startPos = foundPos - buffer;
+                SendMessage(hEdit, EM_SETSEL, startPos, startPos + findLen);
+                SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
+            }
+            else {
+                MessageBox(hWnd, L"Text not found", L"Find", MB_OK | MB_ICONINFORMATION);
+            }
+        }
+        else if (lpfr->Flags & FR_REPLACE)
+        {
+            // Verify selection matches find string
+            if (selEnd - selStart == findLen) {
+                wchar_t* selText = new wchar_t[findLen + 1];
+                SendMessage(hEdit, EM_SETSEL, 0, (LPARAM)selText);
+
+                BOOL match;
+                if (lpfr->Flags & FR_MATCHCASE) {
+                    match = (wcscmp(selText, szFindWhat) == 0);
+                }
+                else {
+                    match = (_wcsicmp(selText, szFindWhat) == 0);
+                }
+
+                if (match) {
+                    SendMessage(hEdit, EM_REPLACESEL, TRUE, (LPARAM)szReplaceWhat);
+                }
+                delete[] selText;
+            }
+        }
+        else if (lpfr->Flags & FR_REPLACEALL)
+        {
+            int replaceCount = 0;
+            std::wstring content(buffer);
+            size_t pos = 0;
+            int replaceLen = wcslen(szReplaceWhat);
+
+            while ((pos = (lpfr->Flags & FR_MATCHCASE)
+                ? content.find(szFindWhat, pos)
+                : _wcsnicmp(content.c_str() + pos, szFindWhat, findLen) ?
+                content.find(szFindWhat, pos + 1) : pos) != std::wstring::npos)
+            {
+                content.replace(pos, findLen, szReplaceWhat);
+                pos += replaceLen;
+                replaceCount++;
+            }
+
+            if (replaceCount > 0) {
+                SetWindowText(hEdit, content.c_str());
+                wchar_t msg[64];
+                swprintf(msg, 64, L"Replaced %d occurrences", replaceCount);
+                MessageBox(hWnd, msg, L"Replace All", MB_OK);
+            }
+            else {
+                MessageBox(hWnd, L"No occurrences found", L"Replace All", MB_OK);
+            }
+        }
+        delete[] buffer;
+    }
+    break;
     case WM_CREATE:
+    {
         hEdit = CreateWindowEx(
-            0,L"EDIT",
+            0, L"EDIT",
             NULL,
             WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL,
-            0,0,0,0,
+            0, 0, 0, 0,
             hWnd,
             (HMENU)1,
             hInst,
             NULL
         );
-        break;
+        HFONT hFont = CreateFont(
+            18, 0,
+            0, 0,
+            FW_NORMAL,
+            FALSE,
+            FALSE,
+            FALSE,
+            ANSI_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY,
+            FIXED_PITCH | FF_MODERN,
+            L"Consolas"
+        );
+        SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+    }
+    break;
     case WM_SIZE:
         MoveWindow(hEdit, 0, 0, LOWORD(lParam), HIWORD(lParam), TRUE);
         break;
@@ -224,7 +389,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
                     break;
                 case IDM_EDIT_SELECTALL:
-                    SendMessage(hEdit, EM_SETSEL, 0, 0);
+                    SendMessage(hEdit, EM_SETSEL, 0, -1);
                     //MessageBox(NULL, L"Hello world", L"hello world", MB_OK);
 				    break;
                 case IDM_EDIT_PASTE:
@@ -234,6 +399,30 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 case IDM_VIEW_FULL:
                     //MessageBox(NULL, L"Full window", L"Full window", MB_OKCANCEL);
                     ToggleFullScreen(hWnd);
+                    break;
+                //find the text 
+                case IDM_EDIT_FIND:
+                {
+                    fr.lStructSize = sizeof(fr);
+                    fr.hwndOwner = hWnd;
+                    fr.lpstrFindWhat = szFindWhat;
+                    fr.wFindWhatLen = 80;
+                    fr.Flags = FR_DOWN;
+                    hFindDlg = FindText(&fr);
+                }
+                    break;
+                //replace the text 
+                case IDM_EDIT_REPLACE:
+                {
+                    fr.lStructSize = sizeof(fr);
+                    fr.hwndOwner = hWnd;
+                    fr.lpstrFindWhat = szFindWhat;
+                    fr.wFindWhatLen = 80;
+                    fr.lpstrReplaceWith = szReplaceWhat;
+                    fr.wReplaceWithLen = 80;
+                    fr.Flags = FR_DOWN;
+                    hReplaceDlg = ReplaceText(&fr);
+                }
                     break;
                 case IDM_VIEW_RESTORE:
                     RestoreWindow(hWnd);
